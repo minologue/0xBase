@@ -1,0 +1,132 @@
+{
+	"common": {
+		"loading": "Loading…",
+		"notFound": {
+			"heading": "Page not found",
+			"body": "The page you're looking for doesn't exist.",
+			"cta": "Go home"
+		},
+		"continue": "Continue",
+		"back": "Back",
+		"save": "Save",
+		"cancel": "Cancel",
+		"signOut": "Sign out",
+		"error": {
+			"heading": "Something went wrong",
+			"body": "An unexpected error occurred.",
+			"retry": "Try again"
+		},
+		"theme": {
+			"toggle": "Toggle theme",
+			"light": "Light",
+			"dark": "Dark",
+			"system": "System"
+		},
+		"locale": {
+			"label": "Language",
+			"en": "English",
+			"ar": "Arabic",
+			"ur": "Urdu",
+			"hi": "Hindi"
+		}
+	},
+	"auth": {
+		"signIn": {
+			"title": "Sign in to 0xBase",
+			"subtitle": "Use your provider account to continue.",
+			"google": "Continue with Google",
+			"github": "Continue with GitHub",
+			"hero": "0xBase",
+			"heroSubtitle": "Ship production apps without rewiring the same foundation."
+		}
+	},
+	"onboarding": {
+		"title": "Let's personalise your experience",
+		"stepOf": "Step {current} of {total}",
+		"steps": {
+			"1": {
+				"question": "What kind of developer are you?",
+				"opt1": "Full-stack",
+				"opt2": "Frontend",
+				"opt3": "Backend",
+				"opt4": "Solo founder"
+			},
+			"2": {
+				"question": "What are you building?",
+				"opt1": "SaaS",
+				"opt2": "Marketplace",
+				"opt3": "Internal tools",
+				"opt4": "Content platform"
+			},
+			"3": {
+				"question": "What is your product name?",
+				"opt1": "Still deciding",
+				"opt2": "I have one",
+				"opt3": "Renaming soon",
+				"opt4": "Private for now"
+			},
+			"4": {
+				"question": "What is your target scale?",
+				"opt1": "MVP",
+				"opt2": "Early growth",
+				"opt3": "Scale-up",
+				"opt4": "Enterprise"
+			},
+			"5": {
+				"question": "How did you hear about 0xBase?",
+				"opt1": "X / Twitter",
+				"opt2": "GitHub",
+				"opt3": "Friend",
+				"opt4": "Newsletter"
+			}
+		}
+	},
+	"profile": {
+		"title": "Profile",
+		"name": "Display name",
+		"email": "Email address",
+		"saveSuccess": "Profile saved.",
+		"saveError": "Failed to save profile."
+	},
+	"nav": {
+		"home": "Home",
+		"docs": "Docs",
+		"profile": "Profile",
+		"signIn": "Sign in"
+	},
+	"landing": {
+		"hero": {
+			"headline": "Ship faster.",
+			"subheadline": "0xBase is the production-ready Next.js scaffold for serious builders.",
+			"cta": "Get started",
+			"ctaSecondary": "Read the docs"
+		},
+		"features": {
+			"title": "Everything wired in.",
+			"auth": {
+				"title": "Auth",
+				"description": "OAuth, sessions and email verification with Better Auth."
+			},
+			"db": {
+				"title": "Database",
+				"description": "Drizzle ORM on Neon Postgres with type-safe migrations."
+			},
+			"i18n": {
+				"title": "i18n",
+				"description": "Multi-locale routing and RTL support with next-intl."
+			},
+			"theme": {
+				"title": "Theming",
+				"description": "Light and dark mode via CSS tokens and next-themes."
+			},
+			"types": {
+				"title": "Type safety",
+				"description": "Strict TypeScript and Zod at every boundary."
+			},
+			"dx": {
+				"title": "Dev experience",
+				"description": "Biome, fast builds and a clean extractable service layer."
+			}
+		}
+	}
+}

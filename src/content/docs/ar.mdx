@@ -1,0 +1,228 @@
+# توثيق 0xBase
+
+0xBase هو إطار عمل Next.js 16 جاهز للإنتاج، يأتي مع المصادقة وقاعدة البيانات
+والترجمة والتخصيص وطبقة خدمة قابلة للاستخراج — لتبدأ في بناء الميزات من اليوم
+الأول بدلاً من إعداد البنية التحتية.
+
+---
+
+## البداية السريعة
+
+### ١. الاستنساخ والتثبيت
+
+```bash
+git clone <your-fork>
+cd 0xBase
+bun install
+```
+
+### ٢. إعداد متغيرات البيئة
+
+انسخ `.env.example` إلى `.env.local` وأضف جميع القيم المطلوبة:
+
+```bash
+cp .env.example .env.local
+```
+
+| المتغير | الوصف |
+|---|---|
+| `DATABASE_URL` | رابط اتصال Neon Postgres المجمّع |
+| `BETTER_AUTH_SECRET` | سر عشوائي 32 بايت — `openssl rand -hex 32` |
+| `BETTER_AUTH_URL` | الرابط العام الكامل لتطبيقك |
+| `GOOGLE_CLIENT_ID` | معرف تطبيق Google OAuth |
+| `GOOGLE_CLIENT_SECRET` | سر تطبيق Google OAuth |
+| `GITHUB_CLIENT_ID` | معرف تطبيق GitHub OAuth |
+| `GITHUB_CLIENT_SECRET` | سر تطبيق GitHub OAuth |
+
+تُتحقق جميع المتغيرات عند بدء التشغيل عبر Zod في `src/lib/env.ts`. سيتوقف التطبيق
+فوراً برسالة واضحة إذا كان أي متغير مطلوب مفقوداً.
+
+### ٣. إعداد قاعدة البيانات
+
+```bash
+bun run db:reset   # يحذف ويُعيد إنشاء المخطط ويطبّق جميع عمليات الترحيل
+```
+
+أو لتطبيق عمليات الترحيل على قاعدة بيانات موجودة:
+
+```bash
+bun run db:migrate
+```
+
+### ٤. تشغيل خادم التطوير
+
+```bash
+bun dev
+```
+
+افتح [http://localhost:3000](http://localhost:3000).
+
+---
+
+## البنية المعمارية
+
+يتبع 0xBase بنية شريحة عمودية صارمة مع عقد طبقات محكم. لا شيء يتخطى طبقة.
+
+```
+Client Component
+    ↓
+Server Action / Route Handler   (رفيع — تحليل، استدعاء، استجابة)
+    ↓
+Feature Service                 (منطق الأعمال، التحقق، التنسيق)
+    ↓
+packages/db / Drizzle           (استعلامات مكتوبة، لا SQL خام)
+    ↓
+Neon Postgres
+```
+
+### شرائح الميزات
+
+كل نطاق يعيش في `src/features/<name>/`:
+
+```
+src/features/profile/
+  service.ts    ← دوال نقية، استعلامات Drizzle، بدون واجهات برمجية Next.js
+  actions.ts    ← "use server"، تحقق Zod، جلسة من المصادقة
+```
+
+الخدمات محايدة للإطار عمداً — يمكن استخراجها إلى Hono API مستقل بدون إعادة كتابة.
+
+### مجموعات المسارات
+
+| المجموعة | المسار | الغرض |
+|---|---|---|
+| `(auth)` | `/login`, `/onboarding` | تدفقات غير مصادق عليها |
+| `(protected)` | `/profile` | مغلفة بـ `<AuthGuard>` |
+| الجذر | `/`, `/docs` | صفحات عامة |
+
+---
+
+## الميزات
+
+### المصادقة
+
+مبنية على [Better Auth](https://better-auth.dev) مع محول Drizzle.
+
+- Google وGitHub OAuth جاهزان من البداية
+- يُتحقق من الجلسة في كل طلب محمي عبر `auth.api.getSession()`
+- مكوّن الخادم `AuthGuard` يوجّه المستخدمين غير المصادق عليهم إلى `/login`
+- `signOut()` من `better-auth/react` تمسح الجلسة من جانب العميل
+
+لإضافة موفر OAuth جديد، أضف بيانات الاعتماد إلى `.env.local` وامتد `socialProviders`
+في `src/lib/auth.ts`.
+
+### قاعدة البيانات
+
+[Drizzle ORM](https://orm.drizzle.team) على [Neon Postgres](https://neon.tech).
+
+- المخطط في `drizzle/schema.ts`
+- تُولَّد عمليات الترحيل بـ `bun run db:generate` وتُطبَّق بـ `bun run db:migrate`
+- لا تعدّل مخطط الإنتاج يدوياً — استخدم دائماً عمليات الترحيل
+- جميع الاستعلامات مكتوبة؛ استخدم `.select({ col: table.col })` لأعمدة محددة
+- استخدم المعاملات للكتابة متعددة الجداول: `db.transaction(async (tx) => { ... })`
+
+### التدويل
+
+مدعوم بـ [next-intl](https://next-intl.dev) مع كشف اللغة القائم على الكوكيز
+(بدون توجيه URL).
+
+- اللغات المدعومة: `en`, `ar`, `ur`, `hi`
+- يُطبَّق RTL تلقائياً لـ `ar` و`ur` عبر `dir="rtl"` في `<html>`
+- ملفات الترجمة في `messages/<locale>.json`
+- غيّر اللغة عبر قائمة `<LocaleSwitcher>` — تكتب في كوكيز وتعيد تحميل الصفحة
+- أضف لغة جديدة بإضافتها إلى `project.locales` في `src/config/project.ts`
+
+### التصميم المرئي
+
+[next-themes](https://github.com/pacocoursey/next-themes) مع خصائص CSS المخصصة.
+
+- الثيم الافتراضي: `dark` (قابل للتغيير في `src/config/project.ts`)
+- جميع الألوان رموز CSS في `src/styles/tokens.css`
+- `ThemeProvider` في `Providers.tsx` يضبط `attribute="class"` ليُبدّل رموز الألوان
+- مكوّن `<ThemeToggle>` آمن من الترطيب (لا يعرض شيئاً حتى يُثبَّت)
+
+### أمان الأنواع
+
+TypeScript بوضع صارم مفعّل. جميع المعاملات وأنواع الإرجاع مكتوبة صراحةً.
+يُستخدم Zod في كل حدود API.
+
+- التحقق في وقت التشغيل: `z.string().min(1).max(50).trim().safeParse(value)`
+- استخدم `satisfies` بدلاً من `as` لتأكيدات الأنواع
+- لا تستخدم `any` — استنتج النوع أو عرّفه
+
+### تجربة التطوير
+
+- **Biome** للتحليل والتنسيق (`bun run lint`, `bun run lint:fix`)
+- **TypeScript** للتحقق الصارم من الأنواع (`npx tsc --noEmit`)
+- **`bun run db:reset`** — إعادة تعيين كاملة للمخطط لبيئة تطوير نظيفة
+- `src/config/project.ts` هو المصدر الوحيد للثوابت على مستوى التطبيق
+
+---
+
+## اتفاقيات API
+
+معالجات المسارات هي غلافات رفيعة — 10-20 سطراً كحد أقصى.
+جميع منطق الأعمال يعيش في طبقة الخدمة.
+
+```typescript
+// ✅ صحيح — معالج رفيع
+export async function POST(req: Request) {
+  const body = await req.json()
+  const result = await myService.doThing(body)
+  return Response.json(result)
+}
+
+// ❌ خطأ — منطق الأعمال في معالج
+export async function POST(req: Request) {
+  const { userId } = await req.json()
+  const user = await db.select().from(users).where(eq(users.id, userId))
+  // ... 40 سطراً إضافياً
+}
+```
+
+إجراءات الخادم تتبع نفس القاعدة — تحقق بـ Zod، استدعاء خدمة، إرجاع نتيجة مكتوبة.
+
+---
+
+## النشر
+
+### Vercel (موصى به)
+
+1. ادفع إلى GitHub
+2. استورد المستودع في Vercel
+3. أضف جميع متغيرات البيئة من `.env.local` إلى إعدادات مشروع Vercel
+4. انشر — يُكتشف Next.js تلقائياً
+
+### ترحيلات قاعدة البيانات في الإنتاج
+
+```bash
+bun run db:migrate
+```
+
+لا تشغّل `db:reset` في الإنتاج أبداً — يحذف جميع البيانات.
+
+---
+
+## هيكل المشروع
+
+```
+0xBase/
+├── drizzle/              ملفات المخطط والترحيل
+├── messages/             ملفات الترجمة (en, ar, ur, hi)
+├── src/
+│   ├── app/              صفحات وتخطيطات Next.js App Router
+│   │   ├── (auth)/       تسجيل الدخول والإعداد
+│   │   ├── (protected)/  الصفحات المحمية بالمصادقة
+│   │   └── docs/         هذا التوثيق
+│   ├── components/
+│   │   ├── auth/         OAuthButtons
+│   │   ├── features/     مكوّنات العميل المرتبطة بالميزات
+│   │   ├── layout/       Nav، SignOutButton
+│   │   └── ui/           ThemeToggle، LocaleSwitcher
+│   ├── config/           project.ts — الثوابت على مستوى التطبيق
+│   ├── content/          محتوى MDX خاص بكل لغة (التوثيق)
+│   ├── features/         شرائح عمودية (الملف الشخصي، المصادقة)
+│   ├── i18n/             إعداد next-intl وإجراءات تغيير اللغة
+│   ├── lib/              auth.ts، session.ts، env.ts
+│   └── styles/           globals.css، tokens.css
+```

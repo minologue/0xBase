@@ -1,0 +1,228 @@
+# 0xBase दस्तावेज़ीकरण
+
+0xBase एक प्रोडक्शन-रेडी Next.js 16 स्कैफोल्ड है जो auth, डेटाबेस, i18n,
+थीमिंग और एक साफ़ निकाले जाने योग्य सर्विस लेयर के साथ आता है — ताकि आप
+पहले दिन से फीचर बनाना शुरू करें, न कि इंफ्रास्ट्रक्चर जोड़ें।
+
+---
+
+## त्वरित प्रारंभ
+
+### १. क्लोन और इंस्टॉल
+
+```bash
+git clone <your-fork>
+cd 0xBase
+bun install
+```
+
+### २. एनवायरनमेंट वेरिएबल्स कॉन्फ़िगर करें
+
+`.env.example` को `.env.local` में कॉपी करें और सभी आवश्यक मान भरें:
+
+```bash
+cp .env.example .env.local
+```
+
+| वेरिएबल | विवरण |
+|---|---|
+| `DATABASE_URL` | Neon Postgres pooled connection URL |
+| `BETTER_AUTH_SECRET` | 32-byte रैंडम सीक्रेट — `openssl rand -hex 32` |
+| `BETTER_AUTH_URL` | आपके ऐप का पूरा पब्लिक URL |
+| `GOOGLE_CLIENT_ID` | Google OAuth ऐप क्लाइंट ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth ऐप क्लाइंट सीक्रेट |
+| `GITHUB_CLIENT_ID` | GitHub OAuth ऐप क्लाइंट ID |
+| `GITHUB_CLIENT_SECRET` | GitHub OAuth ऐप क्लाइंट सीक्रेट |
+
+सभी वेरिएबल `src/lib/env.ts` में Zod के ज़रिए स्टार्टअप पर वैलिडेट होते हैं।
+कोई भी ज़रूरी वेरिएबल गायब हो तो ऐप तुरंत स्पष्ट संदेश के साथ बंद हो जाती है।
+
+### ३. डेटाबेस सेट अप करें
+
+```bash
+bun run db:reset   # स्कीमा ड्रॉप करता है, पुनः बनाता है और सभी माइग्रेशन लागू करता है
+```
+
+मौजूदा डेटाबेस पर माइग्रेशन लागू करने के लिए:
+
+```bash
+bun run db:migrate
+```
+
+### ४. dev सर्वर शुरू करें
+
+```bash
+bun dev
+```
+
+[http://localhost:3000](http://localhost:3000) खोलें।
+
+---
+
+## आर्किटेक्चर
+
+0xBase एक सख्त वर्टिकल-स्लाइस आर्किटेक्चर का पालन करता है।
+कोई लेयर नहीं छोड़ी जाती।
+
+```
+Client Component
+    ↓
+Server Action / Route Handler   (पतला — पार्स, कॉल, रिस्पॉन्स)
+    ↓
+Feature Service                 (बिज़नस लॉजिक, वैलिडेशन, ऑर्केस्ट्रेशन)
+    ↓
+packages/db / Drizzle           (टाइप्ड क्वेरीज़, कोई raw SQL नहीं)
+    ↓
+Neon Postgres
+```
+
+### फीचर स्लाइसेज़
+
+हर डोमेन `src/features/<name>/` में रहता है:
+
+```
+src/features/profile/
+  service.ts    ← शुद्ध फ़ंक्शन, Drizzle queries, कोई Next.js API नहीं
+  actions.ts    ← "use server", Zod वैलिडेशन, auth से session
+```
+
+सर्विसेज़ जानबूझकर फ्रेमवर्क-अज्ञेयवादी हैं — इन्हें बिना किसी बदलाव के
+standalone Hono API में निकाला जा सकता है।
+
+### रूट ग्रुप्स
+
+| ग्रुप | पाथ | उद्देश्य |
+|---|---|---|
+| `(auth)` | `/login`, `/onboarding` | अनऑथेंटिकेटेड फ्लो |
+| `(protected)` | `/profile` | `<AuthGuard>` में लपेटा हुआ |
+| root | `/`, `/docs` | सार्वजनिक पेज |
+
+---
+
+## फीचर्स
+
+### प्रमाणीकरण
+
+[Better Auth](https://better-auth.dev) के साथ Drizzle adapter।
+
+- Google और GitHub OAuth तैयार
+- `auth.api.getSession()` के ज़रिए हर प्रोटेक्टेड रिक्वेस्ट पर session वेरिफाई
+- `AuthGuard` सर्वर कंपोनेंट अनऑथेंटिकेटेड यूज़र्स को `/login` पर रिडायरेक्ट करता है
+- `signOut()` से `better-auth/react` client-side session साफ़ करता है
+
+नया OAuth provider जोड़ने के लिए `.env.local` में credentials डालें और
+`src/lib/auth.ts` में `socialProviders` बढ़ाएं।
+
+### डेटाबेस
+
+[Drizzle ORM](https://orm.drizzle.team) पर [Neon Postgres](https://neon.tech)।
+
+- स्कीमा `drizzle/schema.ts` में
+- `bun run db:generate` से माइग्रेशन जनरेट करें, `bun run db:migrate` से अप्लाई करें
+- प्रोडक्शन स्कीमा कभी मैन्युअल न बदलें — हमेशा माइग्रेशन से गुज़रें
+- सभी क्वेरीज़ टाइप्ड हैं; केवल ज़रूरी columns के लिए `select` करें
+- multi-table writes के लिए transactions इस्तेमाल करें
+
+### अंतर्राष्ट्रीयकरण (i18n)
+
+[next-intl](https://next-intl.dev) के साथ cookie-based locale detection।
+
+- सपोर्टेड लोकेल: `en`, `ar`, `ur`, `hi`
+- `ar` और `ur` के लिए RTL अपने आप `dir="rtl"` से लागू होता है
+- ट्रांसलेशन फाइलें `messages/<locale>.json` में
+- भाषा बदलने के लिए `<LocaleSwitcher>` dropdown — cookie लिखकर पेज reload करता है
+- नई भाषा `project.locales` में जोड़ें
+
+### थीमिंग
+
+[next-themes](https://github.com/pacocoursey/next-themes) के साथ CSS custom properties।
+
+- डिफ़ॉल्ट थीम: `dark` (`src/config/project.ts` में बदला जा सकता है)
+- सभी रंग `src/styles/tokens.css` में CSS tokens — पूरे ऐप को री-थीम करने के लिए यही फाइल बदलें
+- `<ThemeToggle>` hydration-safe है (mount होने तक कुछ नहीं दिखाता)
+
+### टाइप सेफ्टी
+
+TypeScript strict mode। सभी parameters और return types स्पष्ट रूप से typed।
+
+- Runtime validation: `z.string().min(1).max(50).trim().safeParse(value)`
+- Type assertions के लिए `as` की जगह `satisfies` इस्तेमाल करें
+- `any` कभी इस्तेमाल न करें — type derive या define करें
+
+### डेवलपर अनुभव
+
+- **Biome** lint और format के लिए (`bun run lint`, `bun run lint:fix`)
+- **TypeScript** strict type checking (`npx tsc --noEmit`)
+- **`bun run db:reset`** — साफ़ dev स्लेट के लिए पूरा schema reset
+- `src/config/project.ts` app-wide constants का एकमात्र स्रोत
+
+---
+
+## API कन्वेंशन
+
+Route handlers पतले wrapper हैं — अधिकतम 10-20 लाइनें।
+सभी business logic service layer में रहता है।
+
+```typescript
+// ✅ सही — पतला handler
+export async function POST(req: Request) {
+  const body = await req.json()
+  const result = await myService.doThing(body)
+  return Response.json(result)
+}
+
+// ❌ गलत — handler में business logic
+export async function POST(req: Request) {
+  const { userId } = await req.json()
+  const user = await db.select().from(users).where(eq(users.id, userId))
+  // ... 40 और लाइनें
+}
+```
+
+Server Actions भी यही नियम फ़ॉलो करते हैं — Zod से validate, service call,
+typed result return।
+
+---
+
+## डिप्लॉयमेंट
+
+### Vercel (अनुशंसित)
+
+1. GitHub पर push करें
+2. Vercel में repo import करें
+3. `.env.local` से सभी environment variables Vercel project settings में डालें
+4. Deploy करें — Next.js अपने आप detect होता है
+
+### प्रोडक्शन में डेटाबेस माइग्रेशन
+
+```bash
+bun run db:migrate
+```
+
+प्रोडक्शन में `db:reset` कभी न चलाएं — यह सभी डेटा डिलीट कर देता है।
+
+---
+
+## प्रोजेक्ट संरचना
+
+```
+0xBase/
+├── drizzle/              Schema + migration फाइलें
+├── messages/             ट्रांसलेशन फाइलें (en, ar, ur, hi)
+├── src/
+│   ├── app/              Next.js App Router पेज + layouts
+│   │   ├── (auth)/       Login + onboarding
+│   │   ├── (protected)/  Auth-guarded पेज
+│   │   └── docs/         यह दस्तावेज़ीकरण
+│   ├── components/
+│   │   ├── auth/         OAuthButtons
+│   │   ├── features/     Feature-scoped client components
+│   │   ├── layout/       Nav, SignOutButton
+│   │   └── ui/           ThemeToggle, LocaleSwitcher
+│   ├── config/           project.ts — app-wide constants
+│   ├── content/          Locale-specific MDX content (docs)
+│   ├── features/         Vertical slices (profile, auth)
+│   ├── i18n/             next-intl config + locale actions
+│   ├── lib/              auth.ts, session.ts, env.ts
+│   └── styles/           globals.css, tokens.css
+```

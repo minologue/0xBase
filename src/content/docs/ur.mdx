@@ -1,0 +1,226 @@
+# 0xBase دستاویزات
+
+0xBase ایک پروڈکشن ریڈی Next.js 16 اسکافولڈ ہے جو توثیق، ڈیٹابیس، i18n،
+تھیمنگ اور ایک صاف قابلِ نکالنے سرویس لیئر کے ساتھ آتا ہے — تاکہ آپ پہلے
+دن سے فیچرز بنانا شروع کریں نہ کہ انفراسٹرکچر جوڑیں۔
+
+---
+
+## فوری شروعات
+
+### ۱. کلون اور انسٹال
+
+```bash
+git clone <your-fork>
+cd 0xBase
+bun install
+```
+
+### ۲. ماحولیاتی متغیرات ترتیب دیں
+
+`.env.example` کو `.env.local` میں کاپی کریں اور تمام مطلوبہ قدریں پُر کریں:
+
+```bash
+cp .env.example .env.local
+```
+
+| متغیر | تفصیل |
+|---|---|
+| `DATABASE_URL` | Neon Postgres pooled connection URL |
+| `BETTER_AUTH_SECRET` | 32-byte بے ترتیب راز — `openssl rand -hex 32` |
+| `BETTER_AUTH_URL` | آپ کی ایپ کا مکمل عوامی URL |
+| `GOOGLE_CLIENT_ID` | Google OAuth ایپ کلائنٹ ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth ایپ کلائنٹ راز |
+| `GITHUB_CLIENT_ID` | GitHub OAuth ایپ کلائنٹ ID |
+| `GITHUB_CLIENT_SECRET` | GitHub OAuth ایپ کلائنٹ راز |
+
+تمام متغیرات `src/lib/env.ts` میں Zod کے ذریعے اسٹارٹ اپ پر تصدیق ہوتے ہیں۔
+اگر کوئی ضروری متغیر غائب ہو تو ایپ واضح پیغام کے ساتھ فوری بند ہو جاتی ہے۔
+
+### ۳. ڈیٹابیس ترتیب دیں
+
+```bash
+bun run db:reset   # اسکیما حذف کرتا اور دوبارہ بناتا ہے، تمام migrations لگاتا ہے
+```
+
+موجودہ ڈیٹابیس پر migrations لگانے کے لیے:
+
+```bash
+bun run db:migrate
+```
+
+### ۴. dev سرور شروع کریں
+
+```bash
+bun dev
+```
+
+[http://localhost:3000](http://localhost:3000) کھولیں۔
+
+---
+
+## فنِ تعمیر
+
+0xBase سخت عمودی سلائس آرکیٹیکچر پر عمل کرتا ہے۔ کوئی پرت نہیں چھوڑی جاتی۔
+
+```
+Client Component
+    ↓
+Server Action / Route Handler   (پتلا — پارس، کال، جواب)
+    ↓
+Feature Service                 (بزنس لاجک، تصدیق، ترتیب)
+    ↓
+packages/db / Drizzle           (typed queries، کوئی raw SQL نہیں)
+    ↓
+Neon Postgres
+```
+
+### فیچر سلائسز
+
+ہر domain `src/features/<name>/` میں رہتا ہے:
+
+```
+src/features/profile/
+  service.ts    ← خالص فعل، Drizzle queries، Next.js APIs نہیں
+  actions.ts    ← "use server"، Zod validation، auth سے session
+```
+
+خدمات جان بوجھ کر framework سے آزاد ہیں — انہیں بنا کسی تبدیلی Hono API میں
+منتقل کیا جا سکتا ہے۔
+
+### روٹ گروپس
+
+| گروپ | راستہ | مقصد |
+|---|---|---|
+| `(auth)` | `/login`, `/onboarding` | غیر تصدیق شدہ بہاؤ |
+| `(protected)` | `/profile` | `<AuthGuard>` میں لپٹا ہوا |
+| root | `/`, `/docs` | عوامی صفحات |
+
+---
+
+## فیچرز
+
+### توثیق
+
+[Better Auth](https://better-auth.dev) کے ساتھ Drizzle adapter۔
+
+- Google اور GitHub OAuth شامل
+- `auth.api.getSession()` کے ذریعے ہر محفوظ request پر session تصدیق
+- `AuthGuard` سرور کمپوننٹ غیر تصدیق شدہ صارفین کو `/login` پر بھیجتا ہے
+- `signOut()` از `better-auth/react` client-side session صاف کرتا ہے
+
+نیا OAuth provider شامل کرنے کے لیے `.env.local` میں credentials ڈالیں اور
+`src/lib/auth.ts` میں `socialProviders` بڑھائیں۔
+
+### ڈیٹابیس
+
+[Drizzle ORM](https://orm.drizzle.team) بر [Neon Postgres](https://neon.tech)۔
+
+- اسکیما `drizzle/schema.ts` میں
+- `bun run db:generate` سے migrations بنائیں، `bun run db:migrate` سے لگائیں
+- پروڈکشن اسکیما کبھی دستی نہ بدلیں — ہمیشہ migrations سے گزریں
+- تمام queries typed ہیں؛ صرف ضروری columns کے لیے `select` کریں
+- multi-table writes کے لیے transactions استعمال کریں
+
+### بین الاقوامیت (i18n)
+
+[next-intl](https://next-intl.dev) کے ساتھ cookie-based locale detection۔
+
+- سپورٹ شدہ زبانیں: `en`, `ar`, `ur`, `hi`
+- `ar` اور `ur` کے لیے RTL خودکار طور پر `dir="rtl"` سے لگایا جاتا ہے
+- ترجمہ فائلیں `messages/<locale>.json` میں
+- زبان بدلنے کے لیے `<LocaleSwitcher>` dropdown — cookie لکھ کر صفحہ reload کرتا ہے
+- نئی زبان `project.locales` میں شامل کر کے اضافہ کریں
+
+### تھیمنگ
+
+[next-themes](https://github.com/pacocoursey/next-themes) کے ساتھ CSS custom properties۔
+
+- پہلے سے dark تھیم (`src/config/project.ts` میں قابلِ تغییر)
+- تمام رنگ `src/styles/tokens.css` میں CSS tokens — پوری ایپ کو ری-تھیم کرنے کے لیے یہی فائل بدلیں
+- `<ThemeToggle>` hydration-safe ہے (mount ہونے تک کچھ نہیں دکھاتا)
+
+### قسم کی حفاظت
+
+TypeScript strict mode۔ تمام parameters اور return types صراحتاً typed۔
+
+- Runtime validation: `z.string().min(1).max(50).trim().safeParse(value)`
+- Type assertions کے لیے `as` کی بجائے `satisfies` استعمال کریں
+- `any` کبھی استعمال نہ کریں — type derive یا define کریں
+
+### ترقیاتی تجربہ
+
+- **Biome** lint اور format کے لیے (`bun run lint`, `bun run lint:fix`)
+- **TypeScript** سخت type checking (`npx tsc --noEmit`)
+- **`bun run db:reset`** — صاف dev ماحول کے لیے مکمل schema reset
+- `src/config/project.ts` تمام app-wide constants کا واحد ماخذ
+
+---
+
+## API اتفاقیات
+
+Route handlers پتلے ہیں — زیادہ سے زیادہ 10-20 سطریں۔
+تمام بزنس لاجک service layer میں رہتی ہے۔
+
+```typescript
+// ✅ درست — پتلا handler
+export async function POST(req: Request) {
+  const body = await req.json()
+  const result = await myService.doThing(body)
+  return Response.json(result)
+}
+
+// ❌ غلط — handler میں business logic
+export async function POST(req: Request) {
+  const { userId } = await req.json()
+  const user = await db.select().from(users).where(eq(users.id, userId))
+  // ... 40 مزید سطریں
+}
+```
+
+Server Actions بھی یہی اصول اپناتے ہیں — Zod سے validate، service call، typed result۔
+
+---
+
+## استقرار
+
+### Vercel (تجویز کردہ)
+
+1. GitHub پر push کریں
+2. Vercel میں repo import کریں
+3. `.env.local` سے تمام environment variables Vercel project settings میں شامل کریں
+4. Deploy کریں — Next.js خودکار detect ہوتا ہے
+
+### پروڈکشن میں ڈیٹابیس migrations
+
+```bash
+bun run db:migrate
+```
+
+پروڈکشن میں `db:reset` کبھی نہ چلائیں — تمام ڈیٹا حذف کردیتا ہے۔
+
+---
+
+## پراجیکٹ ڈھانچہ
+
+```
+0xBase/
+├── drizzle/              Schema + migration فائلیں
+├── messages/             ترجمہ فائلیں (en, ar, ur, hi)
+├── src/
+│   ├── app/              Next.js App Router صفحات + layouts
+│   │   ├── (auth)/       Login + onboarding
+│   │   ├── (protected)/  Auth-guarded صفحات
+│   │   └── docs/         یہ دستاویزات
+│   ├── components/
+│   │   ├── auth/         OAuthButtons
+│   │   ├── features/     Feature-scoped client components
+│   │   ├── layout/       Nav، SignOutButton
+│   │   └── ui/           ThemeToggle، LocaleSwitcher
+│   ├── config/           project.ts — app-wide constants
+│   ├── content/          زبان کے مطابق MDX مواد (docs)
+│   ├── features/         عمودی سلائسز (profile، auth)
+│   ├── i18n/             next-intl config + زبان بدلنے کے actions
+│   ├── lib/              auth.ts، session.ts، env.ts
+│   └── styles/           globals.css، tokens.css
+```
